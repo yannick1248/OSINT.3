@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.application.use_cases.run_module import RunModuleUseCase
 from app.domain.modules.registry import ModuleNotFoundError, ModuleRegistry
+from app.domain.scope import Scope
 from app.presentation.dependencies import get_registry, get_run_module_use_case
 
 router = APIRouter(prefix="/modules", tags=["modules"])
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/modules", tags=["modules"])
 class RunModuleRequest(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     actor_id: str = Field(default="anonymous", max_length=255)
+    scope: Scope = Field(default=Scope.SANDBOX_TEST)
 
 
 @router.get("")
@@ -46,6 +48,7 @@ async def run_module(
             actor_id=payload.actor_id,
             module_name=module_name,
             raw_params=payload.params,
+            scope=payload.scope,
         )
     except ModuleNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "module not found") from exc

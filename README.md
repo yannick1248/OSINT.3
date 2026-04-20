@@ -1,60 +1,107 @@
 # OSINT OMÉGA AI
 
-Plateforme d'investigation OSINT (Open-Source Intelligence) modulaire,
-extensible et self-hostable, à destination des journalistes d'investigation,
-enquêteurs agréés, équipes de cybersécurité et chercheurs académiques.
+Plateforme d'investigation OSINT modulaire à **usage légal et éthique**, à
+destination des journalistes, enquêteurs mandatés, équipes cyber et
+chercheurs.
 
-> **Usage légal et éthique uniquement.** Chaque module affiche un
-> avertissement et journalise les requêtes pour audit trail.
+Le dépôt rassemble trois briques complémentaires :
 
-## Architecture
+| Brique        | Rôle                                                                 |
+|---------------|----------------------------------------------------------------------|
+| `osint_omega/`| Orchestrateur CLI Python — sélectionne et exécute les outils OSINT. |
+| `backend/`    | API FastAPI (Clean Architecture) exposant les modules + l'orchestrateur. |
+| `frontend/`   | Next.js 15 (App Router) — interface d'investigation.                |
 
-- **Backend** — Python 3.12+, FastAPI (async), SQLAlchemy 2.0, Pydantic v2,
-  Celery + Redis, PostgreSQL, Elasticsearch. Clean Architecture stricte :
-  `domain` / `application` / `infrastructure` / `presentation`.
-- **Frontend** — Next.js 15 (App Router), TypeScript strict, Tailwind CSS +
-  shadcn/ui, Zustand, React Query, Cytoscape.js (graphes), Leaflet.js (carto),
-  Recharts.
-- **Infra** — Docker Compose (dev), manifests Kubernetes (prod), Nginx,
-  Prometheus + Grafana, GitHub Actions.
+Un prompt multi-agent forensique est fourni sous
+`osint_omega/osint_omega/agents/system_prompt.xml` : il encode la gouvernance,
+le modèle de confiance 4 niveaux et les garde-fous décrits ci-dessous, et
+peut être injecté dans n'importe quel LLM orchestrateur amont.
 
-## Modules OSINT
+## Démarrage ultra-rapide (CLI)
 
-Chaque module implémente l'interface `OsintModule` (voir
-`backend/app/domain/modules/base.py`). Un module d'exemple
-(`DomainLookupModule`) est fourni sous
-`backend/app/infrastructure/modules/domain_lookup.py`.
+```bash
+./install.sh core                           # installe osint_omega uniquement
+python omega.py --list-tools
+python omega.py --target example.com --type domain --scope OWNED_ASSETS --pretty
+```
 
-## Démarrage rapide
+Résultat : une `Mission` JSON avec la cible, le périmètre, la liste des
+`ToolResult` (chacun normalisé `source / status / confidence / timestamp /
+data / error / cache_hit`) et les notes du `LegalEthicsGate`.
+
+## Stack complète
 
 ```bash
 cp .env.example .env
-docker compose up --build
+./install.sh full                           # core + backend + frontend
+docker compose up --build                   # Postgres + Redis + ES + API + UI
 ```
 
-- API : http://localhost:8000 (docs : `/docs`)
+- API : http://localhost:8000 (docs OpenAPI : `/docs`)
 - Frontend : http://localhost:3000
 
-## Développement
+## Gouvernance — périmètres obligatoires
+
+Toute mission doit déclarer un `scope` (via CLI ou API) :
+
+- `SANDBOX_TEST` — tests, jeux factices, non probatoire.
+- `OWNED_ASSETS` — actifs que vous possédez ou administrez.
+- `CLIENT_AUTHORIZED_SCOPE` — mandat explicite.
+- `PUBLIC_INTEREST_RESEARCH` — recherche d'intérêt public documentée.
+- `INTERNAL_AUDIT` — audit interne.
+- `LEGALLY_RESTRICTED` — bloqué (seule la méthodologie peut être produite).
+
+Le `LegalEthicsGate` ajoute automatiquement des notes de minimisation pour
+les cibles personnelles (email, pseudo, personne) et les cibles `.onion`.
+
+## Modèle de confiance (4 niveaux)
+
+`LOW < MEDIUM < HIGH < VERY_HIGH` — identique entre
+`osint_omega.Confidence`, `backend.ConfidenceLevel` et le prompt agent.
+Le moteur applique un bonus de corroboration lorsque trois sources
+indépendantes convergent.
+
+## Catalogue d'outils actuels
+
+| Outil           | Cible type         | Disponibilité                        |
+|-----------------|--------------------|---------------------------------------|
+| `domain_syntax` | domain             | toujours (local)                      |
+| `crtsh`         | domain             | toujours (API crt.sh)                 |
+| `hibp`          | email              | clé `HIBP_API_KEY`                    |
+| `maigret`       | username           | binaire `maigret` dans `PATH`         |
+| `holehe`        | email              | binaire `holehe`                      |
+| `the_harvester` | domain             | binaire `theHarvester`                |
+| `subfinder`     | domain             | binaire `subfinder`                   |
+| `amass`         | domain             | binaire `amass`                       |
+| `gosearch`      | username           | binaire `gosearch`                    |
+| `httpx_probe`   | domain             | binaire `httpx` (projectdiscovery)    |
+
+Les wrappers absents retournent `TOOL_NOT_INSTALLED` au lieu d'échouer — la
+mission continue avec ce qui est disponible.
+
+## Architecture
+
+- **Clean Architecture** côté backend (`domain` / `application` /
+  `infrastructure` / `presentation`).
+- **OsintModule ABC** exposé par le backend ; `omega_orchestrator` est un
+  module qui délègue à `osint_omega.Engine`.
+- **Cache SQLite** (`data/cache.db`, TTL 24 h par défaut).
+- **Audit trail** : chaque exécution émet un `AuditEvent` (acteur, scope,
+  module, paramètres, issue).
+- **Éthique by design** : voir [`ETHICS.md`](ETHICS.md).
+
+## Tests
 
 ```bash
-# Backend
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-pytest
-
-# Frontend
-cd frontend
-npm install
-npm run dev
+cd osint_omega && pytest
+cd backend && pytest
 ```
 
 ## Prototype historique
 
-Le prototype initial (neural graph Cytoscape) est archivé sous
+Le prototype `index.html` (neural graph Cytoscape) est archivé sous
 `docs/prototype/` pour référence.
 
 ## Licence
 
-À définir. Voir `LICENSE` (à ajouter).
+À définir (voir `LICENSE` à ajouter).

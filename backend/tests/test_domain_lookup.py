@@ -46,4 +46,4 @@ def test_describe_exposes_schemas(module: DomainLookupModule) -> None:
     assert desc["name"] == "domain_lookup"
     assert "input_schema" in desc
     assert "output_schema" in desc
-    assert desc["confidence_levels"] == ["LOW", "MEDIUM", "HIGH"]
+    assert desc["confidence_levels"] == ["LOW", "MEDIUM", "HIGH", "VERY_HIGH"]

@@ -16,6 +16,7 @@ class ConfidenceLevel(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
+    VERY_HIGH = "VERY_HIGH"
 
 
 class OsintResultStatus(StrEnum):
@@ -55,6 +56,7 @@ class OsintModule(ABC, Generic[TParams, TOutput]):
         ConfidenceLevel.LOW,
         ConfidenceLevel.MEDIUM,
         ConfidenceLevel.HIGH,
+        ConfidenceLevel.VERY_HIGH,
     )
 
     @abstractmethod

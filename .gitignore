@@ -41,3 +41,8 @@ Thumbs.db
 # Docker / logs
 *.log
 docker-volumes/
+
+# osint_omega runtime data (cache, logs)
+data/
+**/data/cache.db
+**/data/logs/

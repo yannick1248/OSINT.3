@@ -1,0 +1,8 @@
+# Dépendances runtime d'osint_omega (CLI + engine).
+# Pour l'environnement de développement complet, préférez :
+#   pip install -e ./osint_omega[dev]
+#   pip install -e ./backend[dev]
+httpx>=0.27
+pydantic>=2.9
+PyYAML>=6.0
+rich>=13.0

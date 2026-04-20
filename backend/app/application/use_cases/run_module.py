@@ -7,6 +7,7 @@ from app.application.ports import AuditSink
 from app.domain.audit import AuditEvent
 from app.domain.modules.base import OsintResult
 from app.domain.modules.registry import ModuleRegistry
+from app.domain.scope import Scope
 
 
 @dataclass(slots=True)
@@ -20,6 +21,7 @@ class RunModuleUseCase:
         actor_id: str,
         module_name: str,
         raw_params: dict[str, Any],
+        scope: Scope = Scope.SANDBOX_TEST,
     ) -> OsintResult[Any]:
         module = self.registry.get(module_name)
         params = module.input_schema.model_validate(raw_params)
@@ -31,6 +33,7 @@ class RunModuleUseCase:
         await self.audit_sink.record(
             AuditEvent(
                 actor_id=actor_id,
+                scope=scope,
                 module=module_name,
                 params=raw_params,
                 result_id=result.result_id,
