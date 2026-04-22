@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterable
-from typing import Sequence
+from collections.abc import Iterable, Sequence
 
 from osint_omega.cache import ResultCache
 from osint_omega.config import Config
-from osint_omega.gate import GateDecision, LegalEthicsGate
+from osint_omega.gate import LegalEthicsGate
 from osint_omega.tools import DEFAULT_TOOLS, Tool
 from osint_omega.types import (
     Confidence,

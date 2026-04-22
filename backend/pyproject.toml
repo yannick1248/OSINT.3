@@ -51,6 +51,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "SIM", "ASYNC"]
+# UP046 pushes PEP 695 syntax (`class C[T]:`) which is 3.12-only and noisy
+# on mypy/pydantic setups; keep explicit Generic[...] for now.
+ignore = ["UP046", "UP047"]
 
 [tool.mypy]
 python_version = "3.12"

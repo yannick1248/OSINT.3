@@ -73,7 +73,11 @@ async def test_engine_aggregated_confidence_bonus_with_corroboration() -> None:
         supported_targets: ClassVar[frozenset[TargetType]] = frozenset({TargetType.DOMAIN})
 
         async def run(self, target: Target) -> ToolResult:
-            return ToolResult(source=self.name, status=ToolStatus.SUCCESS, confidence=Confidence.HIGH)
+            return ToolResult(
+                source=self.name,
+                status=ToolStatus.SUCCESS,
+                confidence=Confidence.HIGH,
+            )
 
     tools = []
     for i in range(3):

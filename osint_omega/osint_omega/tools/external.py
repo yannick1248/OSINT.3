@@ -63,7 +63,7 @@ class ExternalBinaryTool(Tool):
             out, err = await asyncio.wait_for(
                 proc.communicate(), timeout=self.cli_timeout
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.wait()
             raise
@@ -85,7 +85,7 @@ class ExternalBinaryTool(Tool):
             )
         try:
             outcome = await self._run_command(self.build_command(target))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return self._build_result(
                 source=self.name,
                 status=ToolStatus.FAILED,
@@ -200,4 +200,12 @@ class HttpxProbeTool(ExternalBinaryTool):
     supported_targets: ClassVar[frozenset[TargetType]] = frozenset({TargetType.DOMAIN})
 
     def build_command(self, target: Target) -> list[str]:
-        return [self.binary, "-u", target.value, "-title", "-status-code", "-tech-detect", "-silent"]
+        return [
+            self.binary,
+            "-u",
+            target.value,
+            "-title",
+            "-status-code",
+            "-tech-detect",
+            "-silent",
+        ]
