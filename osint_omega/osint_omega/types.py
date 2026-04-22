@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from enum import StrEnum
+from datetime import datetime, timezone
+from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class TargetType(StrEnum):
+class TargetType(str, Enum):
     USERNAME = "username"
     EMAIL = "email"
     DOMAIN = "domain"
@@ -21,7 +21,7 @@ class TargetType(StrEnum):
     FREE_TEXT = "free_text"
 
 
-class Scope(StrEnum):
+class Scope(str, Enum):
     """Périmètres de mission (modèle Perplexity multi-agent)."""
 
     SANDBOX_TEST = "SANDBOX_TEST"
@@ -32,14 +32,14 @@ class Scope(StrEnum):
     LEGALLY_RESTRICTED = "LEGALLY_RESTRICTED"
 
 
-class Confidence(StrEnum):
+class Confidence(str, Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
     VERY_HIGH = "VERY_HIGH"
 
 
-class ToolStatus(StrEnum):
+class ToolStatus(str, Enum):
     SUCCESS = "SUCCESS"
     PARTIAL = "PARTIAL"
     FAILED = "FAILED"
@@ -70,7 +70,7 @@ class ToolResult(BaseModel):
     source: str
     status: ToolStatus
     confidence: Confidence
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     duration_ms: int = 0
     data: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
@@ -86,7 +86,7 @@ class Mission(BaseModel):
     target: Target
     scope: Scope
     actor_id: str = "anonymous"
-    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     results: list[ToolResult] = Field(default_factory=list)
     gate_notes: list[str] = Field(default_factory=list)
 

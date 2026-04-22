@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -19,7 +19,7 @@ class AuditEvent(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     event_id: UUID = Field(default_factory=uuid4)
-    occurred_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    occurred_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     actor_id: str
     scope: Scope = Scope.SANDBOX_TEST
     module: str
