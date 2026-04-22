@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
+from enum import Enum
 
 
-class Scope(StrEnum):
+class Scope(str, Enum):
     SANDBOX_TEST = "SANDBOX_TEST"
     OWNED_ASSETS = "OWNED_ASSETS"
     CLIENT_AUTHORIZED_SCOPE = "CLIENT_AUTHORIZED_SCOPE"

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import UTC, datetime
-from enum import StrEnum
+from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, ClassVar, Generic, TypeVar
 from uuid import UUID, uuid4
 
@@ -12,14 +12,14 @@ TParams = TypeVar("TParams", bound=BaseModel)
 TOutput = TypeVar("TOutput", bound=BaseModel)
 
 
-class ConfidenceLevel(StrEnum):
+class ConfidenceLevel(str, Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
     VERY_HIGH = "VERY_HIGH"
 
 
-class OsintResultStatus(StrEnum):
+class OsintResultStatus(str, Enum):
     SUCCESS = "SUCCESS"
     PARTIAL = "PARTIAL"
     FAILED = "FAILED"
@@ -32,7 +32,7 @@ class OsintResult(BaseModel, Generic[TOutput]):
     module: str
     status: OsintResultStatus
     confidence: ConfidenceLevel
-    executed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    executed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     duration_ms: int = 0
     data: TOutput | None = None
     errors: list[str] = Field(default_factory=list)
