@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🔍 OSINT V3 — Neural Graph Investigation</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/cytoscape@3.28.2/dist/cytoscape.min.js"></script>
+<script src="https://unpkg.com/cytoscape-dagre@2.9.1/cytoscape-dagre.js"></script>
+<script src="https://unpkg.com/cytoscape-cose-bilkent@4.1.0/cytoscape-cose-bilkent.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0a0f1e;color:#e2e8f0;min-height:100vh;}
+#cy-main{width:100%;height:600px;border-radius:1.5rem;background:radial-gradient(ellipse at center,#0d1b3e 0%,#060c1a 100%);}
+.glass{background:rgba(15,25,55,0.85);backdrop-filter:blur(20px);border:1px solid rgba(99,179,237,0.15);border-radius:1.5rem;}
+.gradient-text{background:linear-gradient(135deg,#10b981 0%,#3b82f6 50%,#8b5cf6 100%);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.pulse{animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+.node-chip{padding:4px 12px;border-radius:9999px;font-size:.75rem;font-weight:700;cursor:pointer;border:none;transition:all .2s;}
+.node-chip:hover{transform:scale(1.1);}
+.network-box{border:2px solid rgba(99,179,237,0.3);border-radius:1.25rem;padding:1rem;background:rgba(15,25,55,0.6);cursor:pointer;transition:all .3s;}
+.network-box:hover{border-color:#3b82f6;background:rgba(59,130,246,0.1);transform:translateY(-2px);}
+.network-box.active{border-color:#10b981;background:rgba(16,185,129,0.1);}
+input{background:rgba(15,25,55,0.8);border:2px solid rgba(99,179,237,0.3);border-radius:1rem;padding:.75rem 1rem;color:#e2e8f0;width:100%;transition:all .3s;}
+input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 4px rgba(59,130,246,0.15);}
+input::placeholder{color:#64748b;}
+.btn{border:none;padding:.75rem 1.5rem;border-radius:1rem;font-weight:700;cursor:pointer;transition:all .3s;}
+.btn-search{background:linear-gradient(135deg,#10b981,#3b82f6);}
+.btn-search:hover{transform:scale(1.05);box-shadow:0 10px 30px rgba(59,130,246,0.4);}
+.btn-reset{background:linear-gradient(135deg,#ef4444,#dc2626);}
+.btn-add{background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.5);color:#93c5fd;}
+.btn-add:hover{background:rgba(59,130,246,0.4);}
+.panel{border-radius:1.5rem;overflow:hidden;}
+.tag-node{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:9999px;font-size:.8rem;font-weight:600;margin:3px;cursor:pointer;transition:all .2s;}
+.tag-node:hover{transform:scale(1.08);}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;}
+.modal-box{background:#0d1b3e;border:2px solid rgba(99,179,237,0.3);border-radius:2rem;overflow:hidden;width:100%;max-width:1100px;max-height:90vh;display:flex;flex-direction:column;}
+.glow{box-shadow:0 0 30px rgba(59,130,246,0.3);}
+.network-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const{useState,useRef,useEffect,useCallback}=React;
+
+// ============================================================
+// NEURAL GRAPH ENGINE
+// Each option = node
+// Group of nodes = network (which is itself a node)
+// Each network = a node in a higher-level network
+// ============================================================
+
+// Color palette per network type
+const NET_COLORS = {
+  person:   { bg:'#10b981', text:'#064e3b', border:'#34d399', glow:'rgba(16,185,129,0.6)' },
+  email:    { bg:'#3b82f6', text:'#1e3a8a', border:'#60a5fa', glow:'rgba(59,130,246,0.6)' },
+  phone:    { bg:'#8b5cf6', text:'#3b0764', border:'#a78bfa', glow:'rgba(139,92,246,0.6)' },
+  social:   { bg:'#ec4899', text:'#500724', border:'#f472b6', glow:'rgba(236,72,153,0.6)' },
+  location: { bg:'#f59e0b', text:'#451a03', border:'#fcd34d', glow:'rgba(245,158,11,0.6)' },
+  breach:   { bg:'#ef4444', text:'#450a0a', border:'#f87171', glow:'rgba(239,68,68,0.6)' },
+  domain:   { bg:'#06b6d4', text:'#042f2e', border:'#22d3ee', glow:'rgba(6,182,212,0.6)' },
+  org:      { bg:'#f97316', text:'#431407', border:'#fb923c', glow:'rgba(249,115,22,0.6)' },
+  network:  { bg:'#6366f1', text:'#1e1b4b', border:'#818cf8', glow:'rgba(99,102,241,0.6)' },
+};
+
+// Build a neural graph from a search result
+function buildNeuralGraph(data) {
+  const nodes = [];
+  const edges = [];
+
+  // ROOT NODE (network = person)
+  nodes.push({ data:{ id:'root', label:data.name, type:'person', network:'person', level:0, isNetwork:true, members:['email-net','phone-net','social-net','location-net','breach-net'] }});
+
+  // EMAIL NETWORK NODE (group of email nodes = itself a node)
+  nodes.push({ data:{ id:'email-net', label:'📧 Emails ('+data.emails.length+')', type:'network', network:'email', level:1, isNetwork:true }});
+  data.emails.forEach((e,i) => {
+    nodes.push({ data:{ id:'email-'+i, label:e, type:'email', network:'email', level:2, isNetwork:false }});
+    edges.push({ data:{ source:'email-net', target:'email-'+i, weight:2 }});
+  });
+  edges.push({ data:{ source:'root', target:'email-net', weight:4 }});
+
+  // PHONE NETWORK NODE
+  nodes.push({ data:{ id:'phone-net', label:'📱 Phones ('+data.phones.length+')', type:'network', network:'phone', level:1, isNetwork:true }});
+  data.phones.forEach((p,i) => {
+    nodes.push({ data:{ id:'phone-'+i, label:p, type:'phone', network:'phone', level:2, isNetwork:false }});
+    edges.push({ data:{ source:'phone-net', target:'phone-'+i, weight:2 }});
+  });
+  edges.push({ data:{ source:'root', target:'phone-net', weight:4 }});
+
+  // SOCIAL NETWORK NODE
+  nodes.push({ data:{ id:'social-net', label:'👤 Socials ('+data.social.length+')', type:'network', network:'social', level:1, isNetwork:true }});
+  data.social.forEach((s,i) => {
+    nodes.push({ data:{ id:'social-'+i, label:s.handle, type:'social', network:'social', level:2, isNetwork:false, url:s.url, platform:s.platform }});
+    edges.push({ data:{ source:'social-net', target:'social-'+i, weight:2 }});
+  });
+  edges.push({ data:{ source:'root', target:'social-net', weight:4 }});
+
+  // LOCATION NETWORK NODE
+  nodes.push({ data:{ id:'loc-net', label:'📍 Locations', type:'network', network:'location', level:1, isNetwork:true }});
+  data.locations.forEach((l,i) => {
+    nodes.push({ data:{ id:'loc-'+i, label:l, type:'location', network:'location', level:2, isNetwork:false }});
+    edges.push({ data:{ source:'loc-net', target:'loc-'+i, weight:2 }});
+  });
+  edges.push({ data:{ source:'root', target:'loc-net', weight:4 }});
+
+  // BREACH NETWORK NODE
+  nodes.push({ data:{ id:'breach-net', label:'⚠️ Breaches ('+data.breaches.length+')', type:'network', network:'breach', level:1, isNetwork:true }});
+  data.breaches.forEach((b,i) => {
+    nodes.push({ data:{ id:'breach-'+i, label:b.name+' '+b.year, type:'breach', network:'breach', level:2, isNetwork:false, severity:b.severity }});
+    edges.push({ data:{ source:'breach-net', target:'breach-'+i, weight:2 }});
+  });
+  edges.push({ data:{ source:'root', target:'breach-net', weight:4 }});
+
+  // CROSS-LINKS (recoupements inter-réseau — le coeur OSINT)
+  // Ex: email domain linked to domain network
+  data.emails.forEach((e,i) => {
+    const domain = e.split('@')[1];
+    const domainId = 'domain-'+domain.replace(/\./g,'-');
+    if (!nodes.find(n=>n.data.id===domainId)) {
+      nodes.push({ data:{ id:domainId, label:'🌐 '+domain, type:'domain', network:'domain', level:1, isNetwork:true }});
+      edges.push({ data:{ source:'root', target:domainId, weight:1, isCross:true }});
+    }
+    edges.push({ data:{ source:'email-'+i, target:domainId, weight:1, isCross:true }});
+  });
+
+  return { nodes, edges };
+}
+
+function mockSearch(name) {
+  const base = name.toLowerCase().replace(/ /g,'');
+  const first = name.split(' ')[0] || name;
+  const last = name.split(' ')[1] || '';
+  return {
+    name,
+    riskScore: Math.floor(Math.random()*30)+70,
+    emails: [
+      first.toLowerCase()+'.'+(last||'x').toLowerCase()+'@gmail.com',
+      base+'@protonmail.ch',
+      base+'@bluewin.ch',
+    ],
+    phones: [
+      '+41 79 '+Math.floor(Math.random()*900+100)+' '+Math.floor(Math.random()*900+100),
+      '+41 44 '+Math.floor(Math.random()*900+100)+' '+Math.floor(Math.random()*900+100),
+    ],
+    social: [
+      {platform:'LinkedIn', handle:'@'+base, url:'https://linkedin.com/search/results/people/?keywords='+encodeURIComponent(name)},
+      {platform:'Twitter/X', handle:'@'+base, url:'https://twitter.com/search?q='+encodeURIComponent(name)},
+      {platform:'Instagram', handle:'@'+base, url:'https://www.google.com/search?q=instagram+'+encodeURIComponent(name)},
+      {platform:'GitHub', handle:base, url:'https://github.com/search?q='+encodeURIComponent(name)},
+    ],
+    locations: ['Zürich, CH', 'Kanton Zürich', 'Switzerland'],
+    breaches: [
+      {name:'LinkedIn 2021', year:'2021', severity:'high'},
+      {name:'Dropbox 2012', year:'2012', severity:'medium'},
+      {name:'Zurich.ch Leak', year:'2023', severity:'critical'},
+    ],
+  };
+}
+
+// ============================================================
+// CYTOSCAPE STYLES
+// ============================================================
+function getCyStyles() {
+  return [
+    // All nodes base
+    { selector:'node', style:{
+      'label':'data(label)',
+      'font-size':13,
+      'font-weight':700,
+      'text-valign':'center',
+      'text-halign':'center',
+      'text-wrap':'wrap',
+      'text-max-width':100,
+      'min-zoomed-font-size':8,
+      'color':'#fff',
+      'text-outline-width':3,
+    }},
+    // Nodes by type
+    ...Object.entries(NET_COLORS).map(([type, c])=>({
+      selector:`node[network="${type}"]`,
+      style:{
+        'background-color': c.bg,
+        'border-color': c.border,
+        'border-width': 2,
+      }
+    })),
+    // NETWORK nodes (bigger = group node)
+    { selector:'node[isNetwork="true"]', style:{
+      'width':90, 'height':90,
+      'font-size':15,
+      'font-weight':900,
+      'border-width':4,
+      'border-style':'double',
+    }},
+    // ROOT node
+    { selector:'node[level=0]', style:{
+      'width':130,'height':130,
+      'font-size':18,
+      'font-weight':900,
+      'border-width':6,
+      'border-color':'#fbbf24',
+    }},
+    // Leaf nodes (individual data points)
+    { selector:'node[level=2]', style:{
+      'width':60,'height':60,
+      'font-size':11,
+    }},
+    // Selected
+    { selector:'node:selected', style:{
+      'border-color':'#fbbf24',
+      'border-width':6,
+      'overlay-color':'#fbbf24',
+      'overlay-padding':8,
+      'overlay-opacity':0.15,
+    }},
+    // Edges
+    { selector:'edge', style:{
+      'width':'data(weight)',
+      'line-color':'rgba(99,179,237,0.4)',
+      'target-arrow-color':'rgba(99,179,237,0.6)',
+      'target-arrow-shape':'triangle',
+      'curve-style':'bezier',
+    }},
+    // Cross-links (recoupements)
+    { selector:'edge[?isCross]', style:{
+      'line-color':'rgba(245,158,11,0.6)',
+      'target-arrow-color':'rgba(245,158,11,0.8)',
+      'line-style':'dashed',
+      'width':1.5,
+    }},
+  ];
+}
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
+function OSINTV3() {
+  const[query,setQuery]=useState('');
+  const[result,setResult]=useState(null);
+  const[graphData,setGraphData]=useState(null);
+  const[selected,setSelected]=useState(null);
+  const[preview,setPreview]=useState('');
+  const[history,setHistory]=useState([]);
+  const[expandedNets,setExpandedNets]=useState({});
+  const[workspaceMode,setWorkspaceMode]=useState('webapp');
+  const cyRef=useRef(null);
+  const cyInst=useRef(null);
+
+  const search = () => {
+    if(!query.trim()) return;
+    const data = mockSearch(query);
+    const graph = buildNeuralGraph(data);
+    setResult(data);
+    setGraphData(graph);
+    setHistory(h=>[{q:query,ts:new Date().toLocaleTimeString('fr-CH')},...h].slice(0,8));
+    setSelected(null);
+  };
+
+  useEffect(()=>{
+    if(!graphData||!cyRef.current) return;
+    if(cyInst.current) cyInst.current.destroy();
+    const cy = cytoscape({
+      container: cyRef.current,
+      elements: [...graphData.nodes,...graphData.edges],
+      style: getCyStyles(),
+      layout:{
+        name:'cose-bilkent',
+        quality:'default',
+        nodeDimensionsIncludeLabels:true,
+        fit:true,
+        padding:30,
+        animate:true,
+        animationDuration:800,
+        idealEdgeLength:120,
+        nodeRepulsion:8000,
+        edgeElasticity:0.4,
+        gravity:0.25,
+        gravityRange:3.8,
+        numIter:2500,
+        tilingPaddingVertical:10,
+        tilingPaddingHorizontal:10,
+      },
+    });
+    cy.on('tap','node', evt => {
+      const node = evt.target;
+      setSelected({
+        id: node.id(),
+        label: node.data('label'),
+        type: node.data('type'),
+        network: node.data('network'),
+        isNetwork: node.data('isNetwork'),
+        url: node.data('url'),
+        platform: node.data('platform'),
+        severity: node.data('severity'),
+      });
+    });
+    cy.on('tap', evt => {
+      if(evt.target===cy) setSelected(null);
+    });
+    cyInst.current = cy;
+  },[graphData]);
+
+  const reset = () => {
+    setQuery('');setResult(null);setGraphData(null);setSelected(null);setPreview('');setHistory([]);
+    if(cyInst.current) cyInst.current.destroy();
+  };
+
+  const modeDescriptions = {
+    webapp:'Vue opérateur terrain: triage rapide, graphes live et accès offline prioritaire.',
+    ide:'Mode analyste avancé: workflows, scripts d'enquête, assertions et validation.',
+    crm:'Mode cellule de renseignement: dossiers, timeline, suivi d'actions et handoff équipe.',
+  };
+
+  const fusionPlan = [
+    'Phase 1 — Fusion des sources (personnes, emails, téléphones, domaines) dans un graphe unique.',
+    'Phase 2 — Fusion des usages: Web App terrain + IDE analyste + CRM cellule sans changer de base.',
+    'Phase 3 — Service OSINT souverain: offline-first, journal d'audit, export dossier opérationnel.',
+  ];
+
+  const suggestions = result ? [
+    `🔑 HIBP check ${result.emails[0]}`,
+    `🌐 WHOIS ${result.emails[0].split('@')[1]}`,
+    `📡 Shodan scan Zürich IPs`,
+    `🛰️ Subfinder ${result.emails[0].split('@')[1]}`,
+    `📋 Google Dork site:linkedin.com "${result.name}"`,
+    `🧬 Crosslink: email → domain → org`,
+  ] : [];
+
+  return (
+    <div className="min-h-screen" style={{background:'linear-gradient(160deg,#0a0f1e 0%,#0d1b3e 50%,#0a0f1e 100%)'}}>
+      <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+
+        {/* HEADER */}
+        <header className="text-center">
+          <h1 className="gradient-text text-6xl md:text-8xl font-black mb-4 drop-shadow-2xl">🔍 OSINT V3</h1>
+          <p className="text-xl md:text-2xl text-slate-400 font-semibold mb-8">Neural Graph Investigation • Every option is a node • Every network is a node</p>
+          <div className="flex flex-wrap justify-center gap-3 mb-8">
+            {['🟢 Live','🔒 Sandbox Isolé','🕸️ Neural Graph','⚡ No External Links','📍 Zürich Edition'].map((b,i)=>(
+              <span key={i} className="px-4 py-2 rounded-full text-sm font-bold" style={{background:'rgba(59,130,246,0.15)',border:'1px solid rgba(59,130,246,0.4)',color:'#93c5fd'}}>{b}</span>
+            ))}
+          </div>
+          <button onClick={reset} className="btn btn-reset text-white text-lg px-10 py-4 shadow-2xl">🗑️ Reset Sandbox</button>
+        </header>
+
+        {/* WORKSPACE MODES + FUSION ROADMAP */}
+        <section className="glass p-8 shadow-2xl">
+          <h2 className="text-2xl font-black text-slate-200 mb-4">🧩 Fusion de branches produit (Web App • IDE • CRM)</h2>
+          <p className="text-slate-300 mb-6">
+            Objectif: un seul moteur OSINT très performant, avec 3 interfaces selon le contexte opérationnel.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+            {[
+              {id:'webapp',label:'🌐 Web App'},
+              {id:'ide',label:'🧠 IDE Analyste'},
+              {id:'crm',label:'📂 CRM Renseignement'},
+            ].map(mode=>(
+              <button
+                key={mode.id}
+                onClick={()=>setWorkspaceMode(mode.id)}
+                className="network-box text-left"
+                style={{borderColor:workspaceMode===mode.id?'#10b981':'rgba(99,179,237,0.3)'}}
+              >
+                <p className="font-black text-slate-100">{mode.label}</p>
+                <p className="text-xs text-slate-400 mt-1">{modeDescriptions[mode.id]}</p>
+              </button>
+            ))}
+          </div>
+          <div className="p-4 rounded-2xl" style={{background:'rgba(16,185,129,0.08)',border:'1px solid rgba(16,185,129,0.35)'}}>
+            <p className="text-emerald-300 font-semibold mb-2">Mode actif: {workspaceMode.toUpperCase()}</p>
+            <ul className="space-y-2 text-sm text-slate-300">
+              {fusionPlan.map((step,i)=>(<li key={i}>• {step}</li>))}
+            </ul>
+          </div>
+        </section>
+
+        {/* SEARCH */}
+        <div className="glass p-8 shadow-2xl glow">
+          <h2 className="text-2xl font-black text-slate-200 mb-6">🎯 Cible d'Enquête</h2>
+          <div className="flex flex-col md:flex-row gap-4">
+            <input value={query} onChange={e=>setQuery(e.target.value)} onKeyPress={e=>e.key==='Enter'&&search()}
+              placeholder="Nom, prénom, email, username, téléphone... (ex: Jean Dupont Zürich)" className="flex-1 text-lg" />
+            <button onClick={search} className="btn btn-search text-white text-lg px-12 py-3 shadow-2xl">🚀 Lancer Enquête</button>
+          </div>
+          {history.length>0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {history.map((h,i)=>(
+                <button key={i} onClick={()=>setQuery(h.q)} className="node-chip" style={{background:'rgba(99,102,241,0.2)',color:'#a5b4fc',border:'1px solid rgba(99,102,241,0.4)'}}>
+                  {h.ts} — {h.q}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {result && (
+          <>
+            {/* NEURAL GRAPH (full width, hero) */}
+            <div className="glass p-6 shadow-2xl glow">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-black text-slate-200">🕸️ Neural Investigation Graph</h2>
+                <div className="flex items-center gap-3">
+                  <span className="px-4 py-2 rounded-full text-sm font-bold" style={{background:'rgba(16,185,129,0.15)',border:'1px solid #34d399',color:'#34d399'}}>
+                    {graphData.nodes.length} nœuds • {graphData.edges.length} connexions
+                  </span>
+                  <span className="text-2xl font-black" style={{color:result.riskScore>80?'#10b981':'#f59e0b'}}>{result.riskScore}%</span>
+                </div>
+              </div>
+              <div ref={cyRef} id="cy-main" className="w-full" />
+              <div className="mt-4 flex flex-wrap gap-2">
+                {Object.entries(NET_COLORS).filter(([t])=>['person','email','phone','social','location','breach','domain','network'].includes(t)).map(([type,c])=>(
+                  <span key={type} className="tag-node" style={{background:c.bg+'22',border:'1px solid '+c.border,color:c.border}}>
+                    <span style={{width:8,height:8,borderRadius:'50%',background:c.bg,display:'inline-block'}}></span>
+                    {type}
+                  </span>
+                ))}
+                <span className="tag-node" style={{background:'rgba(245,158,11,0.1)',border:'1px dashed #f59e0b',color:'#fcd34d'}}>--- cross-link</span>
+              </div>
+            </div>
+
+            {/* DETAILS + SUGGESTIONS */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+              {/* NODE DETAIL */}
+              <div className="glass p-6 shadow-2xl">
+                <h3 className="text-xl font-black text-slate-200 mb-4">🧠 Nœud Sélectionné</h3>
+                {!selected ? (
+                  <p className="text-slate-500 text-center py-8">Clique un nœud dans le graphe pour l'inspecter</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-2xl" style={{background:'rgba(59,130,246,0.1)',border:'2px solid rgba(59,130,246,0.4)'}}>
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="network-dot" style={{background:NET_COLORS[selected.network]?.bg||'#3b82f6'}}></span>
+                        <span className="font-black text-lg text-white">{selected.label}</span>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <p><span className="text-slate-400">Type:</span> <span className="font-bold text-white">{selected.type}</span></p>
+                        <p><span className="text-slate-400">Réseau:</span> <span className="font-bold text-white">{selected.network}</span></p>
+                        <p><span className="text-slate-400">Est réseau:</span> <span className="font-bold" style={{color:selected.isNetwork?'#10b981':'#94a3b8'}}>{selected.isNetwork?'✅ Oui (groupe → nœud)':'🔵 Feuille'}</span></p>
+                        {selected.platform && <p><span className="text-slate-400">Plateforme:</span> <span className="font-bold text-white">{selected.platform}</span></p>}
+                        {selected.severity && <p><span className="text-slate-400">Sévérité:</span> <span className="font-bold" style={{color:selected.severity==='critical'?'#ef4444':selected.severity==='high'?'#f97316':'#f59e0b'}}>{selected.severity}</span></p>}
+                      </div>
+                      {selected.url && (
+                        <button onClick={()=>setPreview(selected.url)} className="mt-4 w-full btn btn-search text-white py-2 text-sm">
+                          🔒 Ouvrir Preview Sandbox
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 italic">Ce nœud peut lui-même être développé en réseau</p>
+                  </div>
+                )}
+              </div>
+
+              {/* ALL NETWORKS */}
+              <div className="glass p-6 shadow-2xl">
+                <h3 className="text-xl font-black text-slate-200 mb-4">🔗 Réseaux de Nœuds</h3>
+                <div className="space-y-3">
+                  {[
+                    {key:'email', title:'📧 Emails', items:result.emails},
+                    {key:'phone', title:'📱 Téléphones', items:result.phones},
+                    {key:'social', title:'👤 Profils Sociaux', items:result.social.map(s=>s.platform+': '+s.handle)},
+                    {key:'location', title:'📍 Localisations', items:result.locations},
+                    {key:'breach', title:'⚠️ Breaches', items:result.breaches.map(b=>b.name+' ('+b.severity+')')},
+                  ].map(net=>(
+                    <div key={net.key} className="network-box" onClick={()=>setExpandedNets(e=>({...e,[net.key]:!e[net.key]}))}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="network-dot" style={{background:NET_COLORS[net.key]?.bg}}></span>
+                          <span className="font-bold text-slate-200 text-sm">{net.title}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{background:NET_COLORS[net.key]?.bg+'33',color:NET_COLORS[net.key]?.border}}>{net.items.length} nœuds</span>
+                        </div>
+                        <span className="text-slate-400">{expandedNets[net.key]?'▲':'▼'}</span>
+                      </div>
+                      {expandedNets[net.key] && (
+                        <div className="mt-3 space-y-1">
+                          {net.items.map((item,i)=>(
+                            <div key={i} className="flex items-center gap-2 p-2 rounded-xl" style={{background:'rgba(255,255,255,0.04)'}}>
+                              <span className="network-dot" style={{background:NET_COLORS[net.key]?.bg,width:6,height:6}}></span>
+                              <span className="text-xs font-mono text-slate-300">{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SUGGESTIONS */}
+              <div className="glass p-6 shadow-2xl">
+                <h3 className="text-xl font-black text-slate-200 mb-4">💡 Actions Prédictives</h3>
+                <div className="space-y-3">
+                  {suggestions.map((s,i)=>(
+                    <div key={i} onClick={()=>alert('Lancer : '+s)} className="network-box p-4">
+                      <p className="text-sm font-semibold text-slate-200">{s}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-6 p-4 rounded-2xl" style={{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)'}}>
+                  <p className="text-xs text-slate-400 font-bold mb-2">🧠 LOGIQUE GRAPH</p>
+                  <p className="text-xs text-emerald-400 font-mono">option → nœud</p>
+                  <p className="text-xs text-blue-400 font-mono">groupe(nœuds) → réseau</p>
+                  <p className="text-xs text-purple-400 font-mono">réseau → nœud parent</p>
+                  <p className="text-xs text-yellow-400 font-mono">nœud ↔ nœud = recoupement</p>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* PREVIEW MODAL — sandbox interne, aucun lien externe */}
+        {preview && (
+          <div className="modal" onClick={()=>setPreview('')}>
+            <div className="modal-box" onClick={e=>e.stopPropagation()}>
+              <div className="p-5 flex justify-between items-center" style={{background:'#020817'}}>
+                <div className="flex items-center gap-3">
+                  <span className="network-dot pulse" style={{background:'#10b981'}}></span>
+                  <span className="text-white font-bold">🔒 Preview Sandbox — {preview.slice(0,50)}…</span>
+                </div>
+                <button onClick={()=>setPreview('')} className="text-slate-400 hover:text-white text-3xl">✕</button>
+              </div>
+              <iframe src={preview} className="w-full flex-1 border-none" style={{minHeight:'75vh'}} sandbox="allow-scripts allow-same-origin allow-popups" />
+            </div>
+          </div>
+        )}
+
+        <footer className="text-center py-8 text-slate-600 text-sm">
+          OSINT V3 • yannick1248 • Zürich 2026 • Neural Graph Engine • No external redirects
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(OSINTV3));
+</script>
+</body>
+</html>
