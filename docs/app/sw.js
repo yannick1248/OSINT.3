@@ -1,4 +1,4 @@
-const CACHE = "omega-shell-v1";
+const CACHE = "omega-shell-v2";
 const SHELL = [
   "./",
   "./index.html",
@@ -9,6 +9,9 @@ const SHELL = [
   "./lib/tools.js",
   "./lib/links.js",
   "./lib/history.js",
+  "./lib/suggest.js",
+  "./lib/graph.js",
+  "./lib/selftest.js",
   "./manifest.webmanifest",
   "./icon.svg",
 ];

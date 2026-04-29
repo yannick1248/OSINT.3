@@ -10,6 +10,7 @@
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="styles.css">
+<script defer src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
 </head>
 <body>
 <div id="app">
@@ -45,10 +46,12 @@
   <section class="target-panel">
     <label for="target-input"><strong>2. Cible</strong> — email / domaine / pseudo / IP / téléphone / nom</label>
     <div class="input-row">
-      <input id="target-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ex: example.com · alice@example.com · @john_doe">
+      <input id="target-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ex: example.com · alice@example.com · @john_doe" list="target-suggestions">
       <button id="detect-btn" class="btn btn-primary" type="button">Analyser</button>
     </div>
+    <datalist id="target-suggestions"></datalist>
     <p id="target-type" class="hint"></p>
+    <div id="target-completions" class="completions hidden"></div>
   </section>
 
   <section id="gate-result" class="gate-result hidden"></section>
@@ -57,8 +60,21 @@
     <button role="tab" class="tab active" data-tab="tools">Outils</button>
     <button role="tab" class="tab" data-tab="links">Dorks</button>
     <button role="tab" class="tab" data-tab="results">Résultats</button>
+    <button role="tab" class="tab" data-tab="graph">Graphe</button>
     <button role="tab" class="tab" data-tab="history">Journal</button>
   </nav>
+
+  <section id="panel-graph" class="panel hidden">
+    <h2>Graphe interactif</h2>
+    <p class="hint">Visualise la cible, les outils déclenchés et leurs résultats. Tap un nœud pour voir le détail.</p>
+    <div class="graph-toolbar">
+      <button class="btn btn-ghost" id="graph-fit" type="button">Ajuster</button>
+      <button class="btn btn-ghost" id="graph-relayout" type="button">Re-layout</button>
+      <button class="btn btn-primary" id="graph-runall" type="button">Lancer tous les outils</button>
+    </div>
+    <div id="cy" class="cy"></div>
+    <pre id="graph-detail" class="graph-detail">Aucun nœud sélectionné.</pre>
+  </section>
 
   <section id="panel-tools" class="panel">
     <h2>Outils intégrés</h2>
@@ -86,6 +102,13 @@
       <button class="btn btn-danger" id="clear-btn" type="button">Effacer</button>
     </div>
     <ol id="history-list"></ol>
+  </section>
+
+  <section id="panel-diag" class="panel">
+    <h2>Diagnostic / anti-régression</h2>
+    <p class="hint">Exécute une suite de tests : détection, gate, et un échantillon réseau (DNS, crt.sh, RDAP). Aucune cible privée envoyée — uniquement <code>example.com</code>, <code>8.8.8.8</code>, etc.</p>
+    <button class="btn btn-primary" id="run-selftest" type="button">Lancer le self-test</button>
+    <div id="selftest-output"></div>
   </section>
 
   <section id="legal" class="panel panel-legal">

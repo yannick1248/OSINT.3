@@ -7,6 +7,9 @@ import { evaluateGate } from "./lib/gate.js";
 import { TOOLS } from "./lib/tools.js";
 import { LINK_TREE } from "./lib/links.js";
 import { loadHistory, saveHistory, clearHistory, exportHistory } from "./lib/history.js";
+import { suggestionsFor } from "./lib/suggest.js";
+import { ensureGraph, setGraphData, fitGraph, relayoutGraph } from "./lib/graph.js";
+import { runSelfTest } from "./lib/selftest.js";
 
 const state = {
   scope: "OWNED_ASSETS",
@@ -69,7 +72,9 @@ function selectTab(name) {
   $("#panel-tools").classList.toggle("hidden", name !== "tools");
   $("#panel-links").classList.toggle("hidden", name !== "links");
   $("#panel-results").classList.toggle("hidden", name !== "results");
+  $("#panel-graph").classList.toggle("hidden", name !== "graph");
   $("#panel-history").classList.toggle("hidden", name !== "history");
+  if (name === "graph") renderGraph();
 }
 
 function renderTools() {
@@ -188,6 +193,85 @@ function aggregateConfidence(results) {
   return ["LOW", "LOW", "MEDIUM", "HIGH", "VERY_HIGH"][max];
 }
 
+function renderGraph() {
+  if (!state.target) return;
+  const container = $("#cy");
+  const g = ensureGraph(container);
+  if (!g) {
+    $("#graph-detail").textContent = "Cytoscape n'a pas pu être chargé (CDN bloqué ?). Le graphe est désactivé.";
+    return;
+  }
+  const applicable = TOOLS.filter(t => t.targets.includes(state.target.type));
+  setGraphData(state.target, applicable, state.results, (payload, kind) => {
+    $("#graph-detail").textContent = `[${kind}]\n` + JSON.stringify(payload, null, 2);
+  });
+  $("#graph-detail").textContent = "Tap un nœud pour voir le détail.";
+}
+
+async function runAllTools() {
+  if (!state.target) return;
+  const applicable = TOOLS.filter(t => t.targets.includes(state.target.type));
+  if (!state.gateDecision?.allowed) return;
+  const ids = [];
+  for (const tool of applicable) {
+    try {
+      const result = await tool.run(state.target.value);
+      state.results.unshift(result);
+      ids.push(tool.id);
+    } catch (e) {
+      state.results.unshift({
+        source: tool.id, status: "failed", confidence: "LOW",
+        error: `${e.name || "Error"}: ${e.message || e}`,
+      });
+    }
+    renderResults();
+    renderGraph();
+  }
+  if (ids.length) logMission(ids);
+}
+
+function renderSuggestions(raw) {
+  const box = $("#target-completions");
+  const dl = $("#target-suggestions");
+  dl.innerHTML = "";
+  box.innerHTML = "";
+  const list = suggestionsFor(raw);
+  if (!list.length || !raw) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  for (const s of list) {
+    const opt = document.createElement("option");
+    opt.value = s.value;
+    dl.appendChild(opt);
+
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "completion-chip";
+    chip.textContent = `${s.value} · ${s.type}`;
+    chip.addEventListener("click", () => {
+      $("#target-input").value = s.value;
+      analyze();
+    });
+    box.appendChild(chip);
+  }
+}
+
+async function runDiagnostic() {
+  const out = $("#selftest-output");
+  out.innerHTML = "";
+  const summary = document.createElement("div");
+  summary.className = "selftest-line";
+  summary.textContent = "Exécution…";
+  out.appendChild(summary);
+  const stats = await runSelfTest((line) => {
+    const el = document.createElement("div");
+    el.className = `selftest-line selftest-${line.status}`;
+    el.innerHTML = `<span>${escapeHtml(line.label)}</span><span>${escapeHtml(line.detail || line.status)}</span>`;
+    out.appendChild(el);
+  });
+  summary.className = `selftest-line ${stats.fail ? "selftest-fail" : "selftest-pass"}`;
+  summary.innerHTML = `<span><strong>Bilan</strong></span><span>${stats.pass} pass · ${stats.warn} warn · ${stats.fail} fail</span>`;
+}
+
 function renderHistory() {
   const list = $("#history-list");
   list.innerHTML = "";
@@ -219,6 +303,7 @@ async function runTool(tool) {
   if (btn) { btn.disabled = false; btn.textContent = "Relancer"; }
   logMission([tool.id]);
   renderResults();
+  renderGraph();
   selectTab("results");
 }
 
@@ -268,6 +353,13 @@ function wireUp() {
   $("#target-input").addEventListener("keydown", e => {
     if (e.key === "Enter") analyze();
   });
+  $("#target-input").addEventListener("input", e => renderSuggestions(e.target.value));
+
+  $("#graph-fit").addEventListener("click", fitGraph);
+  $("#graph-relayout").addEventListener("click", relayoutGraph);
+  $("#graph-runall").addEventListener("click", runAllTools);
+
+  $("#run-selftest").addEventListener("click", runDiagnostic);
 
   $$(".tab").forEach(t => t.addEventListener("click", () => selectTab(t.dataset.tab)));
 
