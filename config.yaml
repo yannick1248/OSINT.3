@@ -1,0 +1,24 @@
+# --- OSINT OMEGA — configuration centralisée ---
+# Chargée par osint_omega.config.Config.load().
+
+tor:
+  enabled: false
+  proxy: "socks5://127.0.0.1:9050"
+  control_port: 9051
+
+cache:
+  enabled: true
+  ttl_seconds: 86400  # 24 h
+  db_path: "data/cache.db"
+
+logging:
+  level: "INFO"
+  file: "data/logs/omega.log"
+
+# Les clés API sont facultatives. Elles sont écrasées par les variables
+# d'environnement homonymes : SHODAN_API_KEY, VIRUSTOTAL_API_KEY, etc.
+apis:
+  shodan: ""
+  virustotal: ""
+  securitytrails: ""
+  hibp: ""

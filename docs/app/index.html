@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0f1e">
+<meta name="description" content="OSINT OMÉGA — investigation OSINT mobile légale et éthique. Gate de scope, 4 niveaux de confiance, audit trail.">
+<title>OSINT OMÉGA — Mobile Investigation</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="styles.css">
+<script defer src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <header class="app-header">
+    <div class="brand">
+      <span class="logo">Ω</span>
+      <div>
+        <h1>OSINT OMÉGA</h1>
+        <p class="tag">Mobile investigation · légale &amp; éthique</p>
+      </div>
+    </div>
+    <button id="install-btn" class="btn btn-ghost hidden" type="button">Installer</button>
+  </header>
+
+  <section id="legal-banner" class="banner banner-warning">
+    <strong>Usage encadré.</strong> Réservé aux journalistes, enquêteurs mandatés, équipes cyber et chercheurs dans un cadre légal. Lisez les <a href="#legal">conditions</a> avant toute recherche.
+    <button type="button" class="banner-close" aria-label="Fermer" data-close="legal-banner">×</button>
+  </section>
+
+  <section class="scope-panel">
+    <label for="scope-select"><strong>1. Scope</strong> — cadre juridique de la mission</label>
+    <select id="scope-select" aria-describedby="scope-help">
+      <option value="SANDBOX_TEST">Sandbox (test / formation)</option>
+      <option value="OWNED_ASSETS" selected>Mes propres actifs</option>
+      <option value="CLIENT_AUTHORIZED_SCOPE">Périmètre client autorisé</option>
+      <option value="PUBLIC_INTEREST_RESEARCH">Recherche d'intérêt public</option>
+      <option value="INTERNAL_AUDIT">Audit interne</option>
+      <option value="LEGALLY_RESTRICTED">Juridiquement restreint</option>
+    </select>
+    <p id="scope-help" class="hint"></p>
+  </section>
+
+  <section class="target-panel">
+    <label for="target-input"><strong>2. Cible</strong> — email / domaine / pseudo / IP / téléphone / nom</label>
+    <div class="input-row">
+      <input id="target-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ex: example.com · alice@example.com · @john_doe" list="target-suggestions">
+      <button id="detect-btn" class="btn btn-primary" type="button">Analyser</button>
+    </div>
+    <datalist id="target-suggestions"></datalist>
+    <p id="target-type" class="hint"></p>
+    <div id="target-completions" class="completions hidden"></div>
+  </section>
+
+  <section id="gate-result" class="gate-result hidden"></section>
+
+  <nav id="tabs" class="tabs hidden" role="tablist">
+    <button role="tab" class="tab active" data-tab="tools">Outils</button>
+    <button role="tab" class="tab" data-tab="links">Dorks</button>
+    <button role="tab" class="tab" data-tab="results">Résultats</button>
+    <button role="tab" class="tab" data-tab="graph">Graphe</button>
+    <button role="tab" class="tab" data-tab="history">Journal</button>
+  </nav>
+
+  <section id="panel-graph" class="panel hidden">
+    <h2>Graphe interactif</h2>
+    <p class="hint">Visualise la cible, les outils déclenchés et leurs résultats. Tap un nœud pour voir le détail.</p>
+    <div class="graph-toolbar">
+      <button class="btn btn-ghost" id="graph-fit" type="button">Ajuster</button>
+      <button class="btn btn-ghost" id="graph-relayout" type="button">Re-layout</button>
+      <button class="btn btn-primary" id="graph-runall" type="button">Lancer tous les outils</button>
+    </div>
+    <div id="cy" class="cy"></div>
+    <pre id="graph-detail" class="graph-detail">Aucun nœud sélectionné.</pre>
+  </section>
+
+  <section id="panel-tools" class="panel">
+    <h2>Outils intégrés</h2>
+    <p class="hint">Ces outils exécutent une vraie requête depuis votre navigateur (API CORS publique ou analyse locale). Aucun lien n'est un placeholder.</p>
+    <div id="tools-grid" class="grid"></div>
+  </section>
+
+  <section id="panel-links" class="panel hidden">
+    <h2>Dorks &amp; recherches ciblées</h2>
+    <p class="hint">Chaque bouton lance une vraie recherche (Google dork, moteurs spécialisés, registres publics). Ouvre un nouvel onglet.</p>
+    <div id="links-tree"></div>
+  </section>
+
+  <section id="panel-results" class="panel hidden">
+    <h2>Résultats</h2>
+    <div id="results-summary"></div>
+    <div id="results-list"></div>
+  </section>
+
+  <section id="panel-history" class="panel hidden">
+    <h2>Journal d'audit (local)</h2>
+    <p class="hint">Stocké dans le navigateur uniquement. Export JSON disponible.</p>
+    <div class="toolbar">
+      <button class="btn btn-ghost" id="export-btn" type="button">Exporter JSON</button>
+      <button class="btn btn-danger" id="clear-btn" type="button">Effacer</button>
+    </div>
+    <ol id="history-list"></ol>
+  </section>
+
+  <section id="panel-diag" class="panel">
+    <h2>Diagnostic / anti-régression</h2>
+    <p class="hint">Exécute une suite de tests : détection, gate, et un échantillon réseau (DNS, crt.sh, RDAP). Aucune cible privée envoyée — uniquement <code>example.com</code>, <code>8.8.8.8</code>, etc.</p>
+    <button class="btn btn-primary" id="run-selftest" type="button">Lancer le self-test</button>
+    <div id="selftest-output"></div>
+  </section>
+
+  <section id="legal" class="panel panel-legal">
+    <h2>Conditions d'utilisation</h2>
+    <ul>
+      <li><strong>Cadre légal.</strong> Collecte uniquement de données publiquement accessibles, conformément au RGPD et au droit applicable.</li>
+      <li><strong>Minimisation.</strong> Un scope "SANDBOX" ou "PUBLIC_INTEREST" ciblant une personne physique déclenche un avertissement.</li>
+      <li><strong>Confiance à 4 niveaux.</strong> LOW / MEDIUM / HIGH / VERY_HIGH ; un signal unique reste au mieux HIGH.</li>
+      <li><strong>Auditabilité.</strong> Chaque requête est journalisée localement (scope, cible, horodatage, outils).</li>
+      <li><strong>Pas d'automatisation abusive.</strong> Pas de scan intrusif, pas de brute-force, pas d'ingénierie sociale.</li>
+      <li><strong>Responsabilité.</strong> Vous restez seul responsable de l'usage que vous faites des résultats.</li>
+    </ul>
+  </section>
+
+  <footer class="app-footer">
+    <p>OSINT OMÉGA · <a href="https://github.com/yannick1248/osint.3" rel="noopener">code source</a> · PWA installable</p>
+  </footer>
+</div>
+
+<script src="app.js" type="module"></script>
+</body>
+</html>

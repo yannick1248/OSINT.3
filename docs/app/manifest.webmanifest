@@ -1,0 +1,14 @@
+{
+  "name": "OSINT OMÉGA",
+  "short_name": "OMÉGA",
+  "description": "Plateforme OSINT mobile légale et éthique.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a0f1e",
+  "theme_color": "#0a0f1e",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
