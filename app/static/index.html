@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07111f">
+  <title>OSINT Omega AI — Console d'enquête</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero card">
+      <div>
+        <p class="eyebrow">OSINT Omega AI · Audit obligatoire</p>
+        <h1>Console Web réactive pour enquêtes auditées</h1>
+        <p class="lead">Lancez les modules OSINT, visualisez les sources, les erreurs et la fiche entité sans quitter le navigateur.</p>
+      </div>
+      <div class="status-panel" aria-live="polite">
+        <span id="api-status" class="status-dot pending"></span>
+        <div>
+          <strong id="api-status-text">Connexion API…</strong>
+          <small id="module-count">Chargement des modules</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <form id="investigation-form" class="card form-card">
+        <div class="section-title">
+          <span>1</span>
+          <div>
+            <h2>Nouvelle investigation</h2>
+            <p>Les champs légaux sont requis avant toute exécution.</p>
+          </div>
+        </div>
+
+        <label>Requestor ID *<input name="requestor_id" required value="case-worker-demo" autocomplete="off"></label>
+        <label>Base légale *<input name="legal_basis" required value="missing_person_report_demo" autocomplete="off"></label>
+        <div class="two-cols">
+          <label>Nom<input name="name" placeholder="Jane Doe" autocomplete="off"></label>
+          <label>Username<input name="username" placeholder="janedoe" autocomplete="off"></label>
+        </div>
+        <div class="two-cols">
+          <label>Email<input name="email" type="email" placeholder="jane@example.org" autocomplete="off"></label>
+          <label>Téléphone<input name="phone" placeholder="+41790000000" autocomplete="off"></label>
+        </div>
+        <label>Domaine<input name="domain" placeholder="example.org" autocomplete="off"></label>
+        <label>Chemin image local<input name="image_path" placeholder="/secure/evidence/photo.jpg" autocomplete="off"></label>
+
+        <div class="actions">
+          <button class="primary" type="submit">Lancer l'enquête</button>
+          <button class="secondary" id="fill-demo" type="button">Démo locale</button>
+        </div>
+      </form>
+
+      <aside class="card modules-card">
+        <div class="section-title">
+          <span>2</span>
+          <div>
+            <h2>Modules disponibles</h2>
+            <p>Entrées et clés requises par plugin.</p>
+          </div>
+        </div>
+        <div id="modules" class="modules-list"></div>
+      </aside>
+    </section>
+
+    <section class="card results-card">
+      <div class="section-title">
+        <span>3</span>
+        <div>
+          <h2>Résultats</h2>
+          <p>Fiche entité, synthèse par module et audit trail.</p>
+        </div>
+      </div>
+      <div id="empty-state" class="empty-state">Aucune enquête lancée pour l'instant.</div>
+      <div id="results" class="results" hidden></div>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
