@@ -8,6 +8,7 @@ requests without those audit fields are rejected before plugins run.
 
 ```bash
 cp .env.example .env
+python -m pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
@@ -20,10 +21,15 @@ docker compose up --build
 The compose file starts the API, Celery worker, PostgreSQL, Redis, Elasticsearch,
 EyeOfWeb, Milvus, Prometheus, and Grafana.
 
+## Interface graphique
+
+La console Web est disponible sur `http://localhost:8000/`. Elle charge dynamiquement `/api/v1/modules`, lance `/api/v1/investigate/missing-person` et affiche la fiche entité, les findings normalisés, les modules ignorés et l’audit trail. Elle est volontairement écrite en HTML/CSS/JavaScript natif pour rester légère et éviter une chaîne de build front-end supplémentaire.
+
 ## Endpoints
 
 | Method | Path | Purpose |
 |---|---|---|
+| `GET` | `/` | Console Web responsive |
 | `GET` | `/health` | Liveness check |
 | `GET` | `/api/v1/modules` | Lists modules, inputs, and required environment variables |
 | `POST` | `/api/v1/modules/run` | Runs a single plugin |
